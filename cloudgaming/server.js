@@ -1,31 +1,38 @@
 const express = require('express');
 const app = express();
-const fs = require('fs');
 const path = require('path');
 const robot = require('robotjs');
+const os = require('os'); 
 
-// Read the generated trusted certificates
-const httpsOptions = {
-    key: fs.readFileSync(path.join(__dirname, 'key.pem')),
-    cert: fs.readFileSync(path.join(__dirname, 'cert.pem'))
-};
-
-// Create a native HTTPS secure server
-const http = require('https').createServer(httpsOptions, app);
+// Create a standard HTTP server (No Certificates Required)
+const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 
 app.use(express.static(path.join(__dirname, 'public')));
 const screenSize = robot.getScreenSize();
 
+// Helper function to get the Mac's Local IP Address
+function getLocalIpAddress() {
+    const interfaces = os.networkInterfaces();
+    for (const interfaceName in interfaces) {
+        for (const iface of interfaces[interfaceName]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+    return 'localhost';
+}
+
 io.on('connection', (socket) => {
-    console.log('📱 iPad Connected securely via HTTPS!');
+    console.log('📱 iPad Connected via HTTP!');
     
     const streamInterval = setInterval(() => {
         try {
             const img = robot.screen.capture(0, 0, screenSize.width, screenSize.height);
             const buffer = Buffer.alloc(img.image.length);
             
-            // BGRA to RGBA Fix
+            // BGRA to RGBA Fix for Mac Retina
             for (let i = 0; i < img.image.length; i += 4) {
                 buffer[i]     = img.image[i + 2]; 
                 buffer[i + 1] = img.image[i + 1]; 
@@ -58,6 +65,14 @@ io.on('connection', (socket) => {
 });
 
 const PORT = 3000;
+const LOCAL_IP = getLocalIpAddress();
+
 http.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Secure Server running on https://localhost:${PORT}`);
+    console.log(`\n==================================================`);
+    console.log(`🚀 Server is successfully running!`);
+    console.log(`🖥️  Screen Detected: ${screenSize.width}x${screenSize.height}`);
+    console.log(`--------------------------------------------------`);
+    console.log(`🔗 Type this exact URL into your iPad's browser:`);
+    console.log(`👉 http://${LOCAL_IP}:${PORT}`); // Note: http, not https
+    console.log(`==================================================\n`);
 });
