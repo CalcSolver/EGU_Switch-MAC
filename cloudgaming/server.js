@@ -3,13 +3,16 @@ const app = express();
 const path = require('path');
 const robot = require('robotjs');
 const os = require('os'); 
+const fs = require('fs'); // Node's file system module to read your switch file
 
-// Create a standard HTTP server (No Certificates Required)
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 
 app.use(express.static(path.join(__dirname, 'public')));
 const screenSize = robot.getScreenSize();
+
+// File path for the kill switch
+const switchFilePath = path.join(__dirname, 'server.gitignore');
 
 // Helper function to get the Mac's Local IP Address
 function getLocalIpAddress() {
@@ -24,6 +27,25 @@ function getLocalIpAddress() {
     return 'localhost';
 }
 
+// KILL SWITCH MONITOR: Checks the file every 1000ms (1 second)
+setInterval(() => {
+    if (fs.existsSync(switchFilePath)) {
+        const fileContent = fs.readFileSync(switchFilePath, 'utf8').trim();
+        
+        // If the file explicitly does not say "Yes", kill the engine
+        if (fileContent.toLowerCase() !== 'yes') {
+            console.log('\n🛑 Kill-switch triggered via server.gitignore! Shutting down server immediately...');
+            io.close();
+            http.close(() => {
+                process.exit(0); // Safely exits the Node.js process
+            });
+        }
+    } else {
+        // Fallback: Create the file if it goes missing so it doesn't crash
+        fs.writeFileSync(switchFilePath, 'Yes');
+    }
+}, 1000);
+
 io.on('connection', (socket) => {
     console.log('📱 iPad Connected via HTTP!');
     
@@ -32,7 +54,6 @@ io.on('connection', (socket) => {
             const img = robot.screen.capture(0, 0, screenSize.width, screenSize.height);
             const buffer = Buffer.alloc(img.image.length);
             
-            // BGRA to RGBA Fix for Mac Retina
             for (let i = 0; i < img.image.length; i += 4) {
                 buffer[i]     = img.image[i + 2]; 
                 buffer[i + 1] = img.image[i + 1]; 
@@ -71,8 +92,9 @@ http.listen(PORT, '0.0.0.0', () => {
     console.log(`\n==================================================`);
     console.log(`🚀 Server is successfully running!`);
     console.log(`🖥️  Screen Detected: ${screenSize.width}x${screenSize.height}`);
+    console.log(`🔒 Kill-switch active: Change server.gitignore to 'No' to stop.`);
     console.log(`--------------------------------------------------`);
     console.log(`🔗 Type this exact URL into your iPad's browser:`);
-    console.log(`👉 http://${LOCAL_IP}:${PORT}`); // Note: http, not https
+    console.log(`👉 http://${LOCAL_IP}:${PORT}`);
     console.log(`==================================================\n`);
 });
